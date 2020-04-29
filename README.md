@@ -1,0 +1,2 @@
+# HALCON_Template_Match_chepai_recognition
+利用模板匹配来进行车牌识别
