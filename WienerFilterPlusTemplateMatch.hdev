@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hdevelop file_version="1.1" halcon_version="12.0">
+<procedure name="main">
+<interface/>
+<body>
+<l>dev_update_off ()</l>
+<l>dev_close_window ()</l>
+<l>list_files('G:/我的地盘/毕设用/AA毕设\'s/矿车图片测试用', ['files','follow_links'], ImageFiles)  </l>
+<l>tuple_regexp_select (ImageFiles, ['\\.(tif|tiff|gif|bmp|jpg|jpeg|jp2|png|pcx|pgm|ppm|pbm|xwd|ima)$','ignore_case'], ImageFiles)  </l>
+<l>for imgIndex := 0 to |ImageFiles| - 1 by 1</l>
+<l>    read_image (Image, ImageFiles[imgIndex])</l>
+<c as_id="image_acquisition" as_name="Image Acquisition 01" as_grp="[1,1]" as_ord="1">*读取矿车和模板图片</c>
+<l as_id="image_acquisition" as_name="Image Acquisition 01" as_grp="[2,1]" as_ord="1">*read_image (Image, 'G:/我的地盘/毕设用/AA毕设\'s/矿车上牌3.png')</l>
+<l>read_image (SearchImage, 'G:/我的地盘/毕设用/AA毕设\'s/模板匹配分类器/model.png')</l>
+<c>*获取模板图片的信息，将模板图片二值化，准备一些其他信息</c>
+<l>get_image_size (SearchImage, Width, Height)</l>
+<l>rgb1_to_gray (SearchImage, SearchImage)</l>
+<l>*threshold (SearchImage, Regions3, 138, 255)</l>
+<l>*region_to_bin (Regions3, BinImage1, 255, 0, Width, Height)</l>
+<l>mean_width := Width/2.0</l>
+<l>mean_height := Height/6.0</l>
+<l>tuple_mode :=['A','B','0','1','2','3','4','5','6','7','8','9']</l>
+<l>re :=[]</l>
+<l>dev_open_window_fit_image (Image, 0, 0, -1, -1, WindowHandle)</l>
+<l>dev_set_draw ('margin')</l>
+<l>dev_set_color ('red')</l>
+<l>dev_set_line_width (3)</l>
+<l>set_display_font (WindowHandle, 40, 'mono', 'true', 'false')</l>
+<c>*获取运动模糊后的图像</c>
+<l>simulate_motion (Image, MovedImage, 40, 0, 3)</l>
+<c></c>
+<c>*获取维纳滤波后的图像</c>
+<l>get_image_size (MovedImage, Width1, Height1)</l>
+<l>gen_psf_motion(psf,Width1,Height1,40,0,3)</l>
+<l>median_image(MovedImage,noisefiltered,'circle',1,0)</l>
+<l>wiener_filter (MovedImage, psf, noisefiltered, RestoredImage)</l>
+<l>median_image(RestoredImage,RestoredImage1,'circle',1,0)</l>
+<c></c>
+<c>* RGB转换HSV</c>
+<l>decompose3(RestoredImage1,R,G,B)</l>
+<l>rgb1_to_gray (RestoredImage1, GrayImage1)</l>
+<l>trans_from_rgb(R,G,B,H,S,V,'hsv')</l>
+<l>compose3 (H, S, V, MultiChannelImage)</l>
+<c>*获取车牌区域</c>
+<l>threshold (V, Regions, 109, 295)</l>
+<l>connection (Regions, ConnectedRegions)</l>
+<l>select_shape (ConnectedRegions, SelectedRegions, ['area','rectangularity'], 'and', [0,0.88165], [75688.1,1])</l>
+<l>fill_up (SelectedRegions, RegionFillUp1)</l>
+<l>shape_trans (RegionFillUp1, RegionTrans2, 'rectangle2')</l>
+<l>reduce_domain (RestoredImage, RegionTrans2, ImageReduced)</l>
+<l>*dev_display (RestoredImage1)</l>
+<l>*dev_display (SelectedRegions)</l>
+<l>*dev_clear_window ()</l>
+<l>*dev_display (ImageReduced)</l>
+<c>*分割车牌字体</c>
+<l>rgb1_to_gray (ImageReduced, GrayImage)</l>
+<c>*常规方法</c>
+<l>* threshold (GrayImage, Regions1, 131.8, 255)</l>
+<l>*dev_display (GrayImage)</l>
+<l>* dev_display (Regions1)</l>
+<l>* fill_up (Regions1, RegionFillUp)</l>
+<l>* dilation_rectangle1 (RegionFillUp, RegionDilation, 2,20)</l>
+<l>* connection (RegionDilation, ConnectedRegions1)</l>
+<l>* select_shape (ConnectedRegions1, SelectedRegions1, 'area', 'and', 673, 1600)</l>
+<c></c>
+<l>* shape_trans (SelectedRegions1, RegionTrans, 'rectangle2')</l>
+<c>*改进后的方法</c>
+<l>threshold (GrayImage, Regions2, 138, 255)</l>
+<c></c>
+<l>dilation_rectangle1 (Regions2, RegionDilation, 4, 10)</l>
+<l>connection (RegionDilation, ConnectedRegions2)</l>
+<l>intersection (ConnectedRegions2, Regions2, RegionIntersection)</l>
+<l>select_shape (RegionIntersection, SelectedRegions1, 'area', 'and', 92.66, 1000)</l>
+<l>shape_trans (SelectedRegions1, RegionTrans, 'rectangle2')</l>
+<c>*字体区域排序，从左到右</c>
+<l>sort_region (RegionTrans, SortedRegions, 'first_point', 'true', 'column')</l>
+<l>count_obj (SortedRegions, Number)</l>
+<l> *count_seconds (t1)</l>
+<c>*循环各字体区域进行模板匹配</c>
+<l>for i := 1 to Number  by 1</l>
+<l>    select_obj (SortedRegions, ObjectSelected, i)</l>
+<c>    *扣单个字体</c>
+<l>    reduce_domain (GrayImage1, ObjectSelected, ImageReduced1)</l>
+<l>    *convert_image_type (ImageReduced1, ImageConverted, 'byte')</l>
+<c>   </c>
+<c>    *对单个字体二值化，变为黑白图，从而当做模板</c>
+<l>    threshold (ImageReduced1, Regions2, 160, 290)</l>
+<c>    *对应区域黑白化</c>
+<l>    region_to_bin (Regions2, BinImage, 255, 0, 1071,527)</l>
+<l>    threshold (BinImage, Regions4, 44, 255)</l>
+<l>    shape_trans (Regions4, RegionTrans1, 'rectangle2')</l>
+<c>    *在黑白图之中扣除字符区域</c>
+<l>    reduce_domain (BinImage, RegionTrans1, ImageReduced3)</l>
+<l>   * reduce_domain (BinImage, Regions4, ImageReduced2)</l>
+<c>    </c>
+<c>    *模板匹配</c>
+<c>   </c>
+<l>    inspect_shape_model (ImageReduced3, ModelImages, ModelRegions, 1, 40)</l>
+<l>    create_scaled_shape_model (ModelImages, 3, -0.39, 0.79, 'auto', 0.4, 1.6, 'auto', 'auto', 'use_polarity', 'auto', 'auto', ModelID)</l>
+<l>    find_scaled_shape_model (SearchImage, ModelID, -0.39, 0.78, 0.4, 1.0, 0.5, 1, 0.5, 'least_squares', 0, 0.9, Row, Column, Angle, Scale, Score)</l>
+<c>    </c>
+<l>    if (|Score|!=0)</l>
+<c>    *根据匹配的行列坐标获得匹配的字体</c>
+<l>    x := Row/mean_height</l>
+<l>    y := Column/mean_width</l>
+<l>    x1 :=int(x)</l>
+<l>    y1 := int(y)</l>
+<l>    re[i-1] := tuple_mode[x1*2+y1]</l>
+<l>    endif</l>
+<l>    clear_shape_model (ModelID)</l>
+<l>endfor</l>
+<l>*count_seconds (t2)</l>
+<l>dev_clear_window ()</l>
+<l>dev_display (Image)</l>
+<l>dev_display (MovedImage)</l>
+<l>dev_display (RestoredImage)</l>
+<c></c>
+<l>dev_display (RegionTrans2)</l>
+<c></c>
+<l>disp_message (WindowHandle, '车牌号：', 'window', 20, 20, 'red', 'false')</l>
+<l>for i:= 0 to |re|-1 by 1</l>
+<l>     disp_message (WindowHandle, re[i], 'window', 20, 260+40*i, 'red', 'false')</l>
+<l>endfor</l>
+<l>*disp_message (WindowHandle, t2-t1, 'window', 20, 260+40*i, 'red', 'false')</l>
+<l>stop()</l>
+<l>endfor</l>
+<c></c>
+<c></c>
+</body>
+<docu id="main">
+<parameters/>
+</docu>
+</procedure>
+</hdevelop>
